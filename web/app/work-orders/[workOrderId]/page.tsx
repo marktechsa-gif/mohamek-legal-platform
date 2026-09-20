@@ -315,7 +315,7 @@ export default function WorkOrderDetailPage() {
           </button>
         </div>
         {suggestions.map((s) => (
-          <div key={s.dtc_code} className="card" style={{ background: "#0b1220" }}>
+          <div key={s.dtc_code} className="card" style={{ background: "var(--surface-2)" }}>
             <strong>{s.dtc_code}</strong> <span className="badge">{s.confidence}</span>
             <p><strong>الأسباب المحتملة:</strong> {s.likely_causes.join("، ")}</p>
             <p><strong>خطوات الإصلاح:</strong> {s.recommended_steps.join("، ")}</p>

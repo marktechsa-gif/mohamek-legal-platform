@@ -168,7 +168,7 @@ export default function DashboardPage() {
         <h2>العملاء والمركبات</h2>
         {customers.length === 0 && <p className="muted">لا يوجد عملاء بعد.</p>}
         {customers.map((customer) => (
-          <div key={customer.id} className="card" style={{ background: "#0b1220" }}>
+          <div key={customer.id} className="card" style={{ background: "var(--surface-2)" }}>
             <strong>{customer.name}</strong> <span className="muted">({customer.phone})</span>
 
             {(vehiclesByCustomer[customer.id] ?? []).map((vehicle) => (
