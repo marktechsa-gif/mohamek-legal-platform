@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "أسانيد — صياغة اللوائح والمذكرات القانونية بالذكاء الاصطناعي",
+  title: "تأصيل تك — صياغة اللوائح والمذكرات القانونية بالذكاء الاصطناعي",
   description:
-    "منصة أسانيد تجري معك محادثة استقصائية عن قضيتك وتصوغ لك لائحة الدعوى مستندة لنصوص الأنظمة السعودية.",
+    "منصة تأصيل تك تجري معك محادثة استقصائية عن قضيتك وتصوغ لك لائحة الدعوى مستندة لنصوص الأنظمة السعودية.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

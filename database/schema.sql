@@ -1,4 +1,4 @@
--- أسانيد — Postgres schema (Supabase-compatible)
+-- تأصيل تك — Postgres schema (Supabase-compatible)
 -- Apply with: psql "$DATABASE_URL" -f database/schema.sql
 
 create extension if not exists pgcrypto;

@@ -22,5 +22,5 @@ app.use("/legal-kb", legalKbRouter);
 app.use(errorHandler);
 
 app.listen(env.PORT, () => {
-  console.log(`أسانيد backend listening on port ${env.PORT}`);
+  console.log(`تأصيل تك backend listening on port ${env.PORT}`);
 });

@@ -2,11 +2,11 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
 export function getToken(): string | null {
   if (typeof window === "undefined") return null;
-  return window.localStorage.getItem("asanid_token");
+  return window.localStorage.getItem("taseel_tech_token");
 }
 
 export function setToken(token: string) {
-  window.localStorage.setItem("asanid_token", token);
+  window.localStorage.setItem("taseel_tech_token", token);
 }
 
 interface RequestOptions {
