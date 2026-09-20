@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 import { env } from "../config/env";
+import { ApiError } from "../middleware/errorHandler";
 
 export interface CompleteParams {
   system: string;
@@ -76,7 +77,15 @@ let cachedProvider: AiProvider | undefined;
 
 export function getAiProvider(): AiProvider {
   if (!cachedProvider) {
-    cachedProvider = env.AI_PROVIDER === "openai" ? new OpenAiProvider() : new AnthropicProvider();
+    try {
+      cachedProvider = env.AI_PROVIDER === "openai" ? new OpenAiProvider() : new AnthropicProvider();
+    } catch (err) {
+      throw new ApiError(
+        503,
+        "AI_PROVIDER_NOT_CONFIGURED",
+        `ميزات الذكاء الاصطناعي معطّلة: ${err instanceof Error ? err.message : "unknown error"}. أضِف مفتاح ${env.AI_PROVIDER === "openai" ? "OPENAI_API_KEY" : "ANTHROPIC_API_KEY"} في .env`
+      );
+    }
   }
   return cachedProvider;
 }
