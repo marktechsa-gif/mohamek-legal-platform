@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { apiFetch, getToken, uploadDamagePhoto } from "../../../lib/api";
+import { Nav } from "../../../components/Nav";
 
 interface WorkOrder {
   id: string;
@@ -203,6 +204,7 @@ export default function WorkOrderDetailPage() {
 
   return (
     <main className="container">
+      <Nav />
       <h1>أمر شغل #{workOrder.id.slice(0, 8)}</h1>
       <span className="badge">{STATUS_LABELS[workOrder.status] ?? workOrder.status}</span>
       {error && <div className="error" style={{ marginTop: 12 }}>{error}</div>}

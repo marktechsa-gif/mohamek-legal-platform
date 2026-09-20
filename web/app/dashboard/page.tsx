@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { apiFetch, getToken } from "../../lib/api";
+import { Nav } from "../../components/Nav";
 
 interface Customer {
   id: string;
@@ -134,6 +135,7 @@ export default function DashboardPage() {
 
   return (
     <main className="container">
+      <Nav />
       <h1>لوحة التحكم</h1>
       {error && <div className="error">{error}</div>}
 
