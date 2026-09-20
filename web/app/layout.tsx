@@ -1,4 +1,11 @@
 import type { Metadata } from "next";
+
+// خط Cairo مُستضاف محليًا (@fontsource) بدل الاعتماد على Google Fonts CDN في وقت التشغيل —
+// نفس خط هوية MarkTech Solutions المستخدم في site/index.php، بنفس الأوزان.
+import "@fontsource/cairo/400.css";
+import "@fontsource/cairo/600.css";
+import "@fontsource/cairo/700.css";
+import "@fontsource/cairo/800.css";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -9,14 +16,6 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ar" dir="rtl">
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap"
-          rel="stylesheet"
-        />
-      </head>
       <body>{children}</body>
     </html>
   );
