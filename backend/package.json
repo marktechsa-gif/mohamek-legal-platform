@@ -1,8 +1,8 @@
 {
-  "name": "taseel-tech-backend",
+  "name": "asanid-backend",
   "version": "0.1.0",
   "private": true,
-  "description": "تأصيل تك — API الباك-إند لصياغة اللوائح والمذكرات القانونية بالذكاء الاصطناعي",
+  "description": "أسانيد — API الباك-إند لصياغة اللوائح والمذكرات القانونية بالذكاء الاصطناعي",
   "main": "dist/server.js",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",

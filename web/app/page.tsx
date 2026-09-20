@@ -83,7 +83,7 @@ export default function HomePage() {
 
   return (
     <main className="container">
-      <h1>تأصيل تك</h1>
+      <h1>أسانيد</h1>
       <p className="muted">
         محادثة استقصائية موجَّهة عن قضيتك، ثم صياغة لائحة دعوى مستندة لنصوص الأنظمة السعودية.
       </p>
