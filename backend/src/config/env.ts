@@ -12,6 +12,7 @@ const envSchema = z.object({
   OPENAI_MODEL: z.string().default("gpt-4o"),
   PORT: z.coerce.number().default(4000),
   CORS_ORIGIN: z.string().default("http://localhost:3000"),
+  ZATCA_DEFAULT_SELLER_NAME: z.string().default(""),
   UPLOADS_DIR: z.string().default("./uploads"),
 });
 

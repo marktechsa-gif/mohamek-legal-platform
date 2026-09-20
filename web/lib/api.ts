@@ -2,11 +2,11 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
 export function getToken(): string | null {
   if (typeof window === "undefined") return null;
-  return window.localStorage.getItem("asanid_token");
+  return window.localStorage.getItem("smart_mro_token");
 }
 
 export function setToken(token: string) {
-  window.localStorage.setItem("asanid_token", token);
+  window.localStorage.setItem("smart_mro_token", token);
 }
 
 interface RequestOptions {
@@ -18,7 +18,7 @@ interface RequestOptions {
 export async function apiFetch<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
 
-  if (options.auth) {
+  if (options.auth !== false) {
     const token = getToken();
     if (token) headers.Authorization = `Bearer ${token}`;
   }
@@ -38,13 +38,12 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
   return data as T;
 }
 
-export async function uploadCaseDocument(caseId: string, file: File, description: string) {
+export async function uploadDamagePhoto(workOrderId: string, file: File) {
   const token = getToken();
   const formData = new FormData();
-  formData.append("file", file);
-  formData.append("description", description);
+  formData.append("photo", file);
 
-  const response = await fetch(`${API_URL}/cases/${caseId}/documents`, {
+  const response = await fetch(`${API_URL}/work-orders/${workOrderId}/damage-photos`, {
     method: "POST",
     headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     body: formData,
@@ -52,29 +51,8 @@ export async function uploadCaseDocument(caseId: string, file: File, description
 
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
-    throw new Error(data.message || data.error || "فشل رفع المستند");
+    throw new Error(data.message || data.error || "فشل رفع الصورة");
   }
 
   return response.json();
-}
-
-export async function downloadGeneratedDocx(caseId: string, documentId: string) {
-  const token = getToken();
-  const response = await fetch(`${API_URL}/cases/${caseId}/documents/${documentId}/download`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-  });
-
-  if (!response.ok) {
-    throw new Error("تعذّر تنزيل المستند");
-  }
-
-  const blob = await response.blob();
-  const url = window.URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `lawsuit-statement-${documentId}.docx`;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  window.URL.revokeObjectURL(url);
 }

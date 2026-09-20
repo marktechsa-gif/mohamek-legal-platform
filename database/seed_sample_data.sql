@@ -1,9 +1,8 @@
--- بيانات تمهيدية اختيارية لتجربة التدفق كاملاً (باقات اشتراك تجريبية).
--- لا علاقة لها بقاعدة المعرفة القانونية — تلك في legal-kb/ منفصلة عمدًا.
+-- بيانات تمهيدية اختيارية لتجربة التدفق كاملاً (باقات اشتراك تجريبية للورش).
 -- الأسعار تقديرية للعرض فقط، عدّلها حسب نموذج التسعير الفعلي.
 
-insert into subscription_packages (code, name_ar, description_ar, price_sar, billing_period, documents_included_per_period)
+insert into subscription_packages (code, name_ar, price_sar, billing_period, max_active_work_orders, max_users)
 values
-  ('basic', 'الباقة الأساسية', 'مستند واحد شهريًا (لائحة دعوى)', 99.00, 'monthly', 1),
-  ('pro', 'الباقة الاحترافية', 'حتى 5 مستندات شهريًا', 349.00, 'monthly', 5)
+  ('starter', 'باقة البداية', 199.00, 'monthly', 30, 5),
+  ('growth', 'باقة النمو', 499.00, 'monthly', 150, 20)
 on conflict (code) do nothing;

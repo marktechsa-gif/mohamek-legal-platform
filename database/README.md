@@ -1,21 +1,18 @@
 # قاعدة البيانات
 
-Postgres 14+ (يُوصى بـ Supabase، فيه امتداد `pgvector` مفعّل افتراضيًا).
+Postgres 14+ (Supabase مناسب).
 
 ```bash
 psql "$DATABASE_URL" -f schema.sql
-psql "$DATABASE_URL" -f seed_sample_data.sql   # اختياري: باقتا اشتراك تجريبيتان لعرضهما في الواجهة
+psql "$DATABASE_URL" -f seed_sample_data.sql   # اختياري: باقة اشتراك تجريبية للورش
 ```
 
-## ملاحظة حول `pgvector`
+## العزل بين المستأجرين (Multi-tenancy)
 
-`schema.sql` يحاول تفعيل امتداد `vector` (مستخدم فقط لعمود `legal_articles.embedding` المحجوز لترقية استرجاع دلالي لاحقًا — غير مُستخدم فعليًا في منطق الـ MVP الحالي).
+كل جدول أعمال يحمل `workshop_id`. الباك-إند **لا** يثق بأي `workshop_id` قادم من الطلب نفسه — يستخرجه فقط من المستخدم المُصادَق عليه (JWT) عبر middleware مركزي (`backend/src/middleware/tenant.ts`)، بحيث يستحيل بنيويًا أن تطّلع ورشة على بيانات ورشة أخرى حتى لو حاول العميل تمرير `workshop_id` مختلف يدويًا.
 
-- **Supabase**: يعمل مباشرة بدون أي خطوة إضافية.
-- **Postgres محلي**: ثبّت الامتداد أولًا (`apt install postgresql-16-pgvector` أو ما يعادلها حسب توزيعتك) قبل تشغيل السكربت. إن لم ترغب بتثبيته الآن، احذف سطري `create extension if not exists vector;` وتعريف عمود `embedding` من `schema.sql` — لا شيء آخر في الـ MVP يعتمد عليهما.
+## الترتيب المنطقي
 
-## الترتيب المنطقي للجداول
+`workshops` → `users` → `subscription_packages` → `workshop_subscriptions` → `customers` → `vehicles` → `work_orders` (+`work_order_otps`, `work_order_diagnostics`) → `parts_catalog` / `used_parts_suppliers` → `used_parts_listings` (+`used_parts_supplier_reviews`) → `work_order_items` → `part_shipments` → `invoices` → `technician_kpi_events`.
 
-`users` → `subscription_packages` → `subscriptions` → `cases` → `intake_answers` / `case_documents` → `legal_regulations` → `legal_articles` → `generated_documents` → `generated_document_citations`.
-
-راجع تعليقات كل جدول داخل `schema.sql` نفسه، وتفاصيل قاعدة المعرفة القانونية في [`../docs/LEGAL_KNOWLEDGE_BASE.md`](../docs/LEGAL_KNOWLEDGE_BASE.md).
+راجع تعليقات كل جدول داخل `schema.sql`، والمعمارية الكاملة في [`../docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md).

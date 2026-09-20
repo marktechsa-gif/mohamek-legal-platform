@@ -26,7 +26,7 @@ class AnthropicProvider implements AiProvider {
     this.client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
   }
 
-  async complete({ system, prompt, maxTokens = 4096 }: CompleteParams): Promise<string> {
+  async complete({ system, prompt, maxTokens = 2048 }: CompleteParams): Promise<string> {
     const response = await this.client.messages.create({
       model: this.model,
       max_tokens: maxTokens,
@@ -54,7 +54,7 @@ class OpenAiProvider implements AiProvider {
     this.client = new OpenAI({ apiKey: env.OPENAI_API_KEY });
   }
 
-  async complete({ system, prompt, maxTokens = 4096 }: CompleteParams): Promise<string> {
+  async complete({ system, prompt, maxTokens = 2048 }: CompleteParams): Promise<string> {
     const response = await this.client.chat.completions.create({
       model: this.model,
       max_tokens: maxTokens,

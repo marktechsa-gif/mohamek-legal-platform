@@ -12,6 +12,12 @@ declare global {
   }
 }
 
+/**
+ * يستخرج هوية المستخدم و workshopId من الـ JWT فقط. هذا هو أساس عزل
+ * المستأجرين: لا يوجد أي مسار في هذا الباك-إند يقبل workshop_id من body أو
+ * query المستخدم — كل استعلام يُقيَّد بـ req.user.workshopId حصرًا.
+ * راجع database/README.md قسم "العزل بين المستأجرين".
+ */
 export function requireAuth(req: Request, res: Response, next: NextFunction) {
   const header = req.headers.authorization;
   if (!header?.startsWith("Bearer ")) {

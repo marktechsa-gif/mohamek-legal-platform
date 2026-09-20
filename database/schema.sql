@@ -1,170 +1,280 @@
--- أسانيد — Postgres schema (Supabase-compatible)
+-- Smart MRO & Garage ERP — Postgres schema (Supabase-compatible)
+-- Multi-tenant: every business table carries workshop_id and is scoped by it.
 -- Apply with: psql "$DATABASE_URL" -f database/schema.sql
 
 create extension if not exists pgcrypto;
-create extension if not exists vector; -- pgvector: reserved for future semantic retrieval over legal_articles.embedding
 
 -- ============================================================
--- المستخدمون (العملاء)
+-- المستأجرون: الورش (Tenants)
 -- ============================================================
-create table if not exists users (
+create table if not exists workshops (
   id uuid primary key default gen_random_uuid(),
-  full_name text not null,
-  email text not null unique,
-  phone text,
-  password_hash text not null,
-  is_employee boolean, -- يوجّه فرع أسئلة نظام العمل في محرك الاستقصاء
-  disclaimer_accepted_at timestamptz, -- إقرار صريح بقراءة التنويه القانوني؛ يجب تعبئته قبل أول توليد مستند
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  name text not null,
+  commercial_registration_number text,
+  vat_number text, -- مطلوب لتوليد فواتير ZATCA
+  city text,
+  is_active boolean not null default true,
+  data_residency_note text not null default 'كل بيانات الورشة معزولة بالكامل عبر workshop_id في كل جدول',
+  created_at timestamptz not null default now()
 );
 
 -- ============================================================
--- الباقات والاشتراكات
+-- المستخدمون والأدوار (RBAC)
+-- ============================================================
+create table if not exists users (
+  id uuid primary key default gen_random_uuid(),
+  workshop_id uuid not null references workshops(id) on delete cascade,
+  full_name text not null,
+  email text not null,
+  phone text,
+  password_hash text not null,
+  role text not null check (role in ('owner','receptionist','technician','accountant','warehouse_supervisor')),
+  is_active boolean not null default true,
+  created_at timestamptz not null default now(),
+  unique (workshop_id, email)
+);
+
+create index if not exists idx_users_workshop on users(workshop_id);
+
+-- ============================================================
+-- الباقات والاشتراكات (SaaS billing للورش أنفسها)
 -- ============================================================
 create table if not exists subscription_packages (
   id uuid primary key default gen_random_uuid(),
   code text not null unique,
   name_ar text not null,
-  description_ar text,
   price_sar numeric(10,2) not null,
-  billing_period text not null default 'monthly' check (billing_period in ('monthly','yearly','one_time')),
-  documents_included_per_period integer not null default 1,
-  is_active boolean not null default true,
-  created_at timestamptz not null default now()
+  billing_period text not null default 'monthly' check (billing_period in ('monthly','yearly')),
+  max_active_work_orders integer,
+  max_users integer,
+  is_active boolean not null default true
 );
 
-create table if not exists subscriptions (
+create table if not exists workshop_subscriptions (
   id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references users(id) on delete cascade,
+  workshop_id uuid not null references workshops(id) on delete cascade,
   package_id uuid not null references subscription_packages(id),
-  status text not null default 'pending_payment'
-    check (status in ('pending_payment','active','cancelled','expired')),
-  -- تكامل بوابة الدفع الفعلية (Moyasar/PayTabs/Tap) غير مُنفَّذ في الـ MVP؛
-  -- هذا العمود نقطة الامتداد الوحيدة المطلوبة لاحقًا.
+  status text not null default 'trial' check (status in ('trial','active','past_due','cancelled')),
+  -- تكامل بوابة دفع فعلية (Moyasar/PayTabs/Tap) للتجديد الآلي غير منفَّذ في الـ MVP
   payment_provider_ref text,
-  current_period_start timestamptz,
+  current_period_start timestamptz not null default now(),
   current_period_end timestamptz,
-  documents_used_this_period integer not null default 0,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-
-create index if not exists idx_subscriptions_user on subscriptions(user_id);
-
--- ============================================================
--- القضايا
--- ============================================================
-create table if not exists cases (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references users(id) on delete cascade,
-  subscription_id uuid references subscriptions(id),
-  case_type text not null default 'general'
-    check (case_type in ('general','labor','commercial')), -- يحدد أي حزم أسئلة/أنظمة إضافية تُفعَّل
-  status text not null default 'intake_in_progress'
-    check (status in ('intake_in_progress','ready_to_generate','generated','failed')),
-  title text,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-
-create index if not exists idx_cases_user on cases(user_id);
-
--- ============================================================
--- محادثة الاستقصاء (بنك الأسئلة مُعرَّف في الكود؛ هذا الجدول يخزّن الإجابات فقط)
--- ============================================================
-create table if not exists intake_answers (
-  id uuid primary key default gen_random_uuid(),
-  case_id uuid not null references cases(id) on delete cascade,
-  question_id text not null, -- يطابق id في INTAKE_QUESTIONS بالكود
-  answer_value jsonb not null,
-  answered_at timestamptz not null default now(),
-  unique (case_id, question_id)
-);
-
-create index if not exists idx_intake_answers_case on intake_answers(case_id);
-
--- ============================================================
--- المستندات الداعمة المرفوعة من العميل
--- ============================================================
-create table if not exists case_documents (
-  id uuid primary key default gen_random_uuid(),
-  case_id uuid not null references cases(id) on delete cascade,
-  original_filename text not null,
-  storage_path text not null, -- محلي في الـ MVP؛ لاحقًا مفتاح كائن S3-compatible
-  mime_type text,
-  size_bytes bigint,
-  client_description text, -- وصف العميل المختصر لصلة المستند بالقضية (يُستخدم في الـ Prompt كملخّص فقط)
-  uploaded_at timestamptz not null default now()
-);
-
-create index if not exists idx_case_documents_case on case_documents(case_id);
-
--- ============================================================
--- قاعدة المعرفة القانونية: الأنظمة
--- ============================================================
-create table if not exists legal_regulations (
-  id uuid primary key default gen_random_uuid(),
-  code text not null unique, -- مثال: sharia_procedure_law
-  name_ar text not null,
-  issued_by text,
-  royal_decree_ref text,
-  effective_date date,
-  source_url text,
   created_at timestamptz not null default now()
 );
 
+create index if not exists idx_workshop_subscriptions_workshop on workshop_subscriptions(workshop_id);
+
 -- ============================================================
--- قاعدة المعرفة القانونية: المواد
+-- العملاء والمركبات (CRM & Asset Management)
 -- ============================================================
-create table if not exists legal_articles (
+create table if not exists customers (
   id uuid primary key default gen_random_uuid(),
-  regulation_id uuid not null references legal_regulations(id) on delete cascade,
-  article_number text not null,
-  article_text text not null, -- يجب أن يكون النص الرسمي الحرفي؛ راجع docs/LEGAL_KNOWLEDGE_BASE.md
-  topic_tags text[] not null default '{}',
-  embedding vector(1536), -- محجوز لترقية الاسترجاع الدلالي لاحقًا؛ غير مُستخدم في الـ MVP
-  created_at timestamptz not null default now(),
-  unique (regulation_id, article_number)
+  workshop_id uuid not null references workshops(id) on delete cascade,
+  kind text not null default 'individual' check (kind in ('individual','company','fleet')),
+  name text not null,
+  phone text not null,
+  email text,
+  created_at timestamptz not null default now()
 );
 
-create index if not exists idx_legal_articles_regulation on legal_articles(regulation_id);
-create index if not exists idx_legal_articles_topic_tags on legal_articles using gin(topic_tags);
+create index if not exists idx_customers_workshop on customers(workshop_id);
+
+create table if not exists vehicles (
+  id uuid primary key default gen_random_uuid(),
+  workshop_id uuid not null references workshops(id) on delete cascade,
+  customer_id uuid not null references customers(id) on delete cascade,
+  plate_number text not null,
+  vin text, -- رقم الهيكل، يُستخدم لمطابقة كتالوج القطع
+  make text,
+  model text,
+  model_year integer,
+  current_odometer integer,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_vehicles_workshop on vehicles(workshop_id);
+create index if not exists idx_vehicles_customer on vehicles(customer_id);
 
 -- ============================================================
--- المستندات المولَّدة
+-- أوامر الشغل (Reception & Diagnostics)
 -- ============================================================
-create table if not exists generated_documents (
+create table if not exists work_orders (
   id uuid primary key default gen_random_uuid(),
-  case_id uuid not null references cases(id) on delete cascade,
-  document_type text not null
-    check (document_type in (
-      'lawsuit_statement',   -- لائحة دعوى — النوع المُنفَّذ في الـ MVP
-      'response_memo',       -- مذكرة جوابية
-      'defense_memo',        -- مذكرة دفاع
-      'appeal_memo',         -- مذكرة استئناف
-      'retrial_petition'     -- التماس إعادة نظر
+  workshop_id uuid not null references workshops(id) on delete cascade,
+  vehicle_id uuid not null references vehicles(id),
+  customer_id uuid not null references customers(id),
+  assigned_technician_id uuid references users(id),
+  status text not null default 'checked_in'
+    check (status in (
+      'checked_in',            -- تحت الفحص
+      'awaiting_part',         -- بانتظار القطعة (يشمل: معلق بانتظار توريد تشليح)
+      'in_progress',           -- جارِ الإصلاح
+      'ready_for_pickup',      -- جاهزة للاستلام
+      'closed'                 -- مغلق ومسلَّم
     )),
-  status text not null default 'draft'
-    check (status in ('draft','rejected_missing_grounds','finalized')),
-  content_json jsonb not null, -- البنية الكاملة للمستند (الأطراف، الوقائع، السند النظامي، الطلبات...)
-  docx_storage_path text, -- يُملأ بعد التصدير الناجح لـ Word
+  customer_reported_issue text,
+  intake_notes text,
+  intake_damage_photos text[] not null default '{}', -- مسارات تخزين الصور
+  checkin_otp_verified_at timestamptz,
+  pickup_otp_verified_at timestamptz,
+  opened_at timestamptz not null default now(),
+  closed_at timestamptz
+);
+
+create index if not exists idx_work_orders_workshop on work_orders(workshop_id);
+create index if not exists idx_work_orders_vehicle on work_orders(vehicle_id);
+create index if not exists idx_work_orders_technician on work_orders(assigned_technician_id);
+
+-- رموز التحقق الآمن عند الاستلام والتسليم
+create table if not exists work_order_otps (
+  id uuid primary key default gen_random_uuid(),
+  work_order_id uuid not null references work_orders(id) on delete cascade,
+  purpose text not null check (purpose in ('checkin','pickup')),
+  code_hash text not null,
+  expires_at timestamptz not null,
+  verified_at timestamptz,
+  -- بديل موثّق عند تعذّر الاتصال (توقيع رقمي / تسجيل مفوَّض) بدل الـ OTP
+  fallback_method text check (fallback_method in ('digital_signature','authorized_person')),
+  fallback_reference text,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_work_order_otps_wo on work_order_otps(work_order_id);
+
+-- ============================================================
+-- أكواد الأعطال (DTC) ومساعد التشخيص بالذكاء الاصطناعي
+-- ============================================================
+create table if not exists work_order_diagnostics (
+  id uuid primary key default gen_random_uuid(),
+  work_order_id uuid not null references work_orders(id) on delete cascade,
+  dtc_codes text[] not null default '{}', -- أكواد OBD-II الخام؛ إدخال يدوي في الـ MVP، ربط أجهزة الفحص لاسلكيًا لاحقًا
+  ai_suggested_causes jsonb, -- مخرجات مساعد الذكاء الاصطناعي: أسباب محتملة + خطوات إصلاح
   ai_provider text,
   ai_model text,
   generated_at timestamptz not null default now()
 );
 
-create index if not exists idx_generated_documents_case on generated_documents(case_id);
+create index if not exists idx_work_order_diagnostics_wo on work_order_diagnostics(work_order_id);
 
 -- ============================================================
--- الربط بين المستند المولَّد والمواد النظامية المُستشهَد بها فعليًا
--- (كل صف هنا هو استشهاد تم التحقق أنه موجود حرفيًا في legal_articles — راجع validateCitations في الكود)
+-- كتالوج قطع الغيار (جديد) والتشاليح (مستعمل)
 -- ============================================================
-create table if not exists generated_document_citations (
+create table if not exists parts_catalog (
   id uuid primary key default gen_random_uuid(),
-  generated_document_id uuid not null references generated_documents(id) on delete cascade,
-  legal_article_id uuid not null references legal_articles(id),
-  cited_for text -- السياق: أي جزء من المستند استند لهذه المادة (مثلاً "الطلب الأول")
+  workshop_id uuid references workshops(id) on delete cascade, -- null = كتالوج عام مشترك بين كل الورش
+  part_number text not null,
+  name_ar text not null,
+  compatible_makes text[] not null default '{}',
+  compatible_models text[] not null default '{}',
+  new_price_sar numeric(10,2),
+  created_at timestamptz not null default now()
 );
 
-create index if not exists idx_generated_document_citations_doc on generated_document_citations(generated_document_id);
+create table if not exists used_parts_suppliers (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  phone text,
+  city text,
+  rating_average numeric(2,1) not null default 0, -- من 5، محسوبة من used_parts_supplier_reviews
+  on_time_rate numeric(5,2), -- نسبة الالتزام بالوقت
+  return_rate numeric(5,2), -- نسبة المرتجعات
+  created_at timestamptz not null default now()
+);
+
+create table if not exists used_parts_listings (
+  id uuid primary key default gen_random_uuid(),
+  supplier_id uuid not null references used_parts_suppliers(id) on delete cascade,
+  part_catalog_id uuid references parts_catalog(id),
+  description_ar text not null,
+  used_price_sar numeric(10,2) not null,
+  condition_grade text check (condition_grade in ('excellent','good','fair')),
+  warranty_days integer not null default 0, -- ضمان القطعة المستعملة، يتبع المورّد
+  is_available boolean not null default true,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_used_parts_listings_supplier on used_parts_listings(supplier_id);
+
+create table if not exists used_parts_supplier_reviews (
+  id uuid primary key default gen_random_uuid(),
+  supplier_id uuid not null references used_parts_suppliers(id) on delete cascade,
+  workshop_id uuid not null references workshops(id),
+  stars integer not null check (stars between 1 and 5),
+  comment text,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_used_parts_reviews_supplier on used_parts_supplier_reviews(supplier_id);
+
+-- ============================================================
+-- بنود أمر الشغل (قطع + مصنعيات)
+-- ============================================================
+create table if not exists work_order_items (
+  id uuid primary key default gen_random_uuid(),
+  work_order_id uuid not null references work_orders(id) on delete cascade,
+  item_type text not null check (item_type in ('labor','new_part','used_part')),
+  description_ar text not null,
+  used_parts_listing_id uuid references used_parts_listings(id), -- فقط لو item_type = used_part
+  quantity integer not null default 1,
+  unit_price_sar numeric(10,2) not null,
+  workshop_margin_sar numeric(10,2) not null default 0, -- هامش ربح الورشة عند بيع قطعة مستعملة
+  status text not null default 'pending'
+    check (status in ('pending','ordered','delivered','installed')),
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_work_order_items_wo on work_order_items(work_order_id);
+
+-- ============================================================
+-- اللوجستيات: طلب الشراء وتتبع الشحن
+-- ============================================================
+create table if not exists part_shipments (
+  id uuid primary key default gen_random_uuid(),
+  work_order_item_id uuid not null references work_order_items(id) on delete cascade,
+  carrier_name text,
+  tracking_reference text,
+  -- تكامل API فعلي مع شركات الشحن (أرامكس/SMSA...) غير منفَّذ في الـ MVP؛
+  -- هذا الحقل نقطة الامتداد لتتبع لحظي حقيقي لاحقًا.
+  status text not null default 'requested'
+    check (status in ('requested','picked_up','in_transit','delivered','delayed')),
+  estimated_arrival_at timestamptz, -- ناتج محرك حساب ETA
+  delivered_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_part_shipments_item on part_shipments(work_order_item_id);
+
+-- ============================================================
+-- الفواتير (ZATCA)
+-- ============================================================
+create table if not exists invoices (
+  id uuid primary key default gen_random_uuid(),
+  workshop_id uuid not null references workshops(id) on delete cascade,
+  work_order_id uuid not null references work_orders(id),
+  invoice_number text not null,
+  subtotal_sar numeric(10,2) not null,
+  vat_sar numeric(10,2) not null,
+  total_sar numeric(10,2) not null,
+  zatca_qr_base64 text not null, -- TLV-encoded QR payload حسب متطلبات المرحلة الأولى المبسّطة
+  status text not null default 'unpaid' check (status in ('unpaid','paid','void')),
+  issued_at timestamptz not null default now(),
+  paid_at timestamptz,
+  unique (workshop_id, invoice_number)
+);
+
+create index if not exists idx_invoices_workshop on invoices(workshop_id);
+create index if not exists idx_invoices_work_order on invoices(work_order_id);
+
+-- ============================================================
+-- مؤشرات أداء الفنيين (KPIs)
+-- ============================================================
+create table if not exists technician_kpi_events (
+  id uuid primary key default gen_random_uuid(),
+  workshop_id uuid not null references workshops(id) on delete cascade,
+  technician_id uuid not null references users(id),
+  work_order_id uuid not null references work_orders(id),
+  minutes_to_close integer not null,
+  recorded_at timestamptz not null default now()
+);
+
+create index if not exists idx_technician_kpi_technician on technician_kpi_events(technician_id);
